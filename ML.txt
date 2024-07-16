@@ -1,0 +1,191 @@
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------Start
+
+1.....MNIST CNN
+
+import tensorflow as tf
+import numpy as np
+from tensorflow.keras.datasets import mnist
+from sklearn.metrics import confusion_matrix, accuracy_score
+
+(x_train, y_train), (x_test, y_test) = mnist.load_data()
+x_train, x_test = x_train.reshape(-1, 28, 28, 1) / 255.0, x_test.reshape(-1, 28, 28, 1) / 255.0
+
+model = tf.keras.models.Sequential([
+    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(28,28,1)),
+    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
+    tf.keras.layers.MaxPool2D((2,2)),
+    tf.keras.layers.Dropout(0.4),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(10, activation='softmax')
+])
+
+model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
+history = model.fit(x_train, y_train, batch_size=256, epochs=5, validation_data=(x_test, y_test))
+
+y_pred = np.argmax(model.predict(x_test), axis=-1)
+print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("Accuracy:", accuracy_score(y_test, y_pred))
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+2.....IMDB  RNN  LSTM
+
+import tensorflow as tf
+import numpy as np
+from sklearn.metrics import confusion_matrix, accuracy_score
+
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.imdb.load_data(num_words=20000)
+x_train, x_test = [tf.keras.preprocessing.sequence.pad_sequences(i, maxlen=100) for i in [x_train, x_test]]
+
+model = tf.keras.models.Sequential([
+    tf.keras.layers.Embedding(20000, 128, input_length=100),
+    tf.keras.layers.LSTM(128, activation='tanh'),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
+
+model.compile(optimizer='rmsprop', loss='binary_crossentropy', metrics=['accuracy'])
+model.fit(x_train, y_train, batch_size=128, epochs=5, validation_data=(x_test, y_test))
+
+y_pred = (model.predict(x_test) > 0.5).astype("int32").flatten()
+print("Confusion Matrix:", confusion_matrix(y_test, y_pred))
+print("Accuracy:", accuracy_score(y_test, y_pred))
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+3.....GOOGLE STOCK RNN
+
+import tensorflow as tf
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
+
+# Load and preprocess data
+train_data = pd.read_csv('Google_Stock_Price_Train.csv')
+test_data = pd.read_csv('Google_Stock_Price_Test.csv')
+sc = MinMaxScaler(feature_range=(0,1))
+train_set = sc.fit_transform(train_data.iloc[:, 1:2].values)
+
+# Prepare training data
+x_train, y_train = [], []
+for i in range(60, len(train_set)):
+    x_train.append(train_set[i-60:i, 0])
+    y_train.append(train_set[i, 0])
+x_train, y_train = np.array(x_train), np.array(y_train)
+x_train = x_train.reshape(x_train.shape[0], x_train.shape[1], 1)
+
+# Build and train model
+model = tf.keras.models.Sequential([
+    tf.keras.layers.LSTM(60, activation='relu', return_sequences=True, input_shape=(60,1)),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.LSTM(60, activation='relu', return_sequences=True),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.LSTM(80, activation='relu', return_sequences=True),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.LSTM(120, activation='relu'),
+    tf.keras.layers.Dropout(0.2),
+    tf.keras.layers.Dense(1)
+])
+model.compile(optimizer='adam', loss='mean_squared_error')
+model.fit(x_train, y_train, batch_size=128, epochs=10)
+
+# Prepare test data
+dataset_total = pd.concat((train_data['Open'], test_data['Open']), axis=0)
+inputs = sc.transform(dataset_total[len(dataset_total) - len(test_data) - 60:].values.reshape(-1,1))
+x_test = np.array([inputs[i-60:i, 0] for i in range(60, 80)])
+x_test = x_test.reshape(x_test.shape[0], x_test.shape[1], 1)
+
+# Make predictions
+predicted_stock_price = sc.inverse_transform(model.predict(x_test))
+real_stock_price = test_data.iloc[:, 1:2].values
+
+print(predicted_stock_price[5], real_stock_price[5])
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+4.....BACK PROPAGATION
+
+
+
+import numpy as np
+
+class NeuralNetwork:
+    def __init__(self, input_size, hidden_size, output_size):
+        self.w1 = np.random.randn(input_size, hidden_size)
+        self.w2 = np.random.randn(hidden_size, output_size)
+        self.b1 = np.zeros((1, hidden_size))
+        self.b2 = np.zeros((1, output_size))
+
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def sigmoid_derivative(self, x):
+        return x * (1 - x)
+
+    def forward(self, X):
+        self.z1 = np.dot(X, self.w1) + self.b1
+        self.a1 = self.sigmoid(self.z1)
+        self.z2 = np.dot(self.a1, self.w2) + self.b2
+        return self.sigmoid(self.z2)
+
+    def train(self, X, y, epochs, lr):
+        for epoch in range(epochs):
+            y_pred = self.forward(X)
+            
+            d2 = (y_pred - y) * self.sigmoid_derivative(y_pred)
+            d1 = np.dot(d2, self.w2.T) * self.sigmoid_derivative(self.a1)
+            
+            self.w2 -= lr * np.dot(self.a1.T, d2)
+            self.b2 -= lr * np.sum(d2, axis=0, keepdims=True)
+            self.w1 -= lr * np.dot(X.T, d1)
+            self.b1 -= lr * np.sum(d1, axis=0, keepdims=True)
+            
+            if epoch % 1000 == 0:
+                loss = np.mean(np.square(y - y_pred))
+                print(f"Epoch {epoch}, Loss: {loss}")
+
+X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+y = np.array([[0], [1], [1], [0]])
+
+nn = NeuralNetwork(input_size=2, hidden_size=4, output_size=1)
+nn.train(X, y, epochs=8000, lr=0.1)
+
+print("Predictions after training:")
+print(nn.forward(X))
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+5....K MEANS clustering
+
+
+from sklearn.cluster import KMeans
+import numpy as np
+data = np.array([[1, 2], [5, 8], [1.5, 1.8], [8, 8], [1, 0.6], [9, 11]])
+
+kmeans = KMeans(n_clusters=2)
+
+kmeans.fit(data)
+
+centroids = kmeans.cluster_centers_
+labels = kmeans.labels_
+
+print("Centroids:")
+print(centroids)
+print("Labels:")
+print(labels)
